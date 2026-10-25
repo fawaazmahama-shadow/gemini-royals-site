@@ -104,7 +104,7 @@ create policy "backgrounds delete" on backgrounds for delete to authenticated us
 create table settings (key text primary key, value text not null, created_at timestamptz default now());
 alter table settings enable row level security;
 create policy "settings read" on settings for select to authenticated using (my_role() in ('member','admin'));
-insert into settings (key, value) values ('whatsapp', 'https://chat.whatsapp.com/CsCadWl5KLZCBmSmhvC7ZX')
+insert into settings (key, value) values ('whatsapp', 'PASTE_WHATSAPP_GROUP_LINK_HERE')
   on conflict (key) do update set value = excluded.value;
 
 -- Rebuild a profile for every existing login account. Everyone starts as 'pending' except the owner, who is the admin.
