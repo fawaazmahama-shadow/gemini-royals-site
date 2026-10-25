@@ -52,10 +52,33 @@ main{animation:in .5s ease both}@keyframes in{from{opacity:0;transform:translate
 .pwb{position:relative}.pwb input{padding-right:48px}.eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:0;cursor:pointer;font-size:1.1rem;padding:6px}
 .av{width:64px;height:64px;border-radius:50%;display:grid;place-items:center;font:800 1.4rem Fraunces,serif;color:#fff;background:linear-gradient(135deg,var(--ac),var(--ac2));margin-bottom:12px}
 @media(max-width:720px){nav{flex:1 1 100%;order:3}header{gap:8px;padding:10px 14px}main{padding:22px 16px 48px}.hero{padding-top:24px}.cd div{min-width:70px;padding:10px 12px}}
+
+/* vertical sidebar menu */
+html{scrollbar-width:thin;scrollbar-color:var(--ac) transparent}
+[data-theme=dark]{color-scheme:dark}[data-theme=light]{color-scheme:light}
+::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:linear-gradient(var(--ac),var(--ac2));border-radius:99px;border:2px solid var(--bg)}
+::-webkit-scrollbar-thumb:hover{filter:brightness(1.2)}::-webkit-scrollbar-corner{background:var(--bg)}
+body{padding-left:250px}
+header{position:fixed;left:0;top:0;bottom:0;width:250px;flex-direction:column;align-items:stretch;flex-wrap:nowrap;gap:10px;padding:20px 14px;border-bottom:0;border-right:1px solid var(--ln);overflow-y:auto;z-index:20;background:color-mix(in srgb,var(--card) 94%,transparent)}
+header .logo{font-size:1.4rem;padding:4px 10px 12px}
+nav{flex-direction:column;overflow:visible;gap:2px}
+nav a{padding:10px 14px;border-radius:12px;font-size:.95rem}
+nav a.on{background:linear-gradient(90deg,color-mix(in srgb,var(--ac) 28%,transparent),transparent);box-shadow:inset 3px 0 0 var(--ac)}
+header select,header .ic{width:100%}
+.bar{display:none}
+@media(max-width:900px){
+body{padding-left:0;padding-top:56px}
+.bar{display:flex;position:fixed;top:0;left:0;right:0;height:56px;align-items:center;gap:12px;padding:0 14px;background:color-mix(in srgb,var(--bg) 85%,transparent);backdrop-filter:blur(14px);border-bottom:1px solid var(--ln);z-index:15}
+header{transform:translateX(-105%);transition:transform .25s;width:min(280px,82vw);background:var(--card)}
+header.open{transform:none;box-shadow:0 0 60px #000a}
+main{padding:22px 16px 48px}
+}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 </head>
 <body data-page="wishes">
+<div class="bar"><button class="ic" id="mb" aria-label="Open menu">☰</button><a class="logo" href="index.html">Gemini Royals ♊</a></div>
 <header>
 <a class="logo" href="index.html">Gemini Royals ♊</a>
 <nav id="nav"></nav>
@@ -94,6 +117,7 @@ const db={
 async function up(f){
  if(sb){const p=Date.now()+'-'+f.name.replace(/[^\w.]/g,'_');const{error}=await sb.storage.from('files').upload(p,f);
   if(error){alert(error.message);return''}return sb.storage.from('files').getPublicUrl(p).data.publicUrl}
+ if(f.size>2e6){alert('Demo mode only keeps small files. Connect Supabase for real uploads.');return''}
  return new Promise(r=>{const x=new FileReader();x.onload=()=>r(x.result);x.readAsDataURL(f)});
 }
 window.add=async e=>{e.preventDefault();const f=e.target,t=f.dataset.t,r={};
@@ -101,11 +125,11 @@ window.add=async e=>{e.preventDefault();const f=e.target,t=f.dataset.t,r={};
  if(r.starts_at)r.starts_at=new Date(r.starts_at).toISOString();
  if(r.event_date)r.event_date=new Date(r.event_date).toISOString();
  if(!r.url&&r.link)r.url=r.link;delete r.link;
- if(t==='photos'&&!r.url)return alert('Please choose a photo.');
+ if(t==='photos'&&!r.url)return alert('Please choose a photo.');if(t==='recordings'&&!r.url)return alert('Add a video file or paste a link.');
  if(r.guests)r.guests=true;if(t==='classes'&&!sb)r.room=Math.random().toString(36).slice(2,12)+Date.now().toString(36);
  await db.add(t,r);f.reset();route();return false};
 window.rm=async(t,id)=>{await db.del(t,id);route()};
-window.join=async(r,i)=>{$('#live').innerHTML=`<iframe allow="camera;microphone;fullscreen;display-capture" src="https://meet.jit.si/${encodeURIComponent(r)}#userInfo.displayName=%22${encodeURIComponent(user.name||'Guest')}%22"></iframe>`;$('#live').scrollIntoView({behavior:'smooth'});await db.add('attendance',{class_id:+i,email:user.email,name:user.name},1)};
+window.join=async(u,i)=>{const jit=u.startsWith('https://meet.jit.si/');window.open(jit?u+'#userInfo.displayName=%22'+encodeURIComponent(user.name||'Guest')+'%22':u,'_blank','noopener');await db.add('attendance',{class_id:+i,email:user.email,name:user.name},1)};
 window.setRole=async(id,r)=>{const{error}=await sb.from('profiles').update({role:r}).eq('id',id);if(error)alert(error.message);await load(user);route()};
 
 const form=(t,inner)=>`<form class="card form" data-t="${t}" onsubmit="return add(event)">${inner}<button class="btn">Add</button></form>`;
@@ -117,7 +141,7 @@ const empty=m=>`<p class="mut">${m}</p>`;
 const pages={
  async home(){
   const ev=(await db.list('events')).filter(e=>new Date(e.event_date)>new Date()).sort((a,b)=>new Date(a.event_date)-new Date(b.event_date))[0];
-  const an=ok()?(await db.list('announcements'))[0]:null;const tiles=[['timeline','🗓️','Timeline','Milestones, exams and events.'],['classes','🎥','Online classes','Live sessions, right here.'],['resources','📚','Resources','Share notes, slides and links.'],['gallery','📸','Memories','Photos from our journey.'],['wishes','💌','Guestbook','Leave a message for the group.'],['community','📲','WhatsApp','Our WhatsApp group, for members.'],['chat','💬','Group chat','Chat with the group, right here.'],['announcements','📢','Announcements','News from the admins.'],['assignments','📝','Assignments','Deadlines and what’s due.'],['members','🧑‍🤝‍🧑','Members','Meet the rest of the group.'],['about','👥','Creators','Who built this site.']];
+  const an=ok()?(await db.list('announcements'))[0]:null;const tiles=[['timeline','🗓️','Timeline','Milestones, exams and events.'],['classes','🎥','Online classes','Live sessions, right here.'],['recordings','🎞️','Recordings','Watch or download past classes.'],['resources','📚','Resources','Share notes, slides and links.'],['gallery','📸','Memories','Photos from our journey.'],['wishes','💌','Guestbook','Leave a message for the group.'],['community','📲','WhatsApp','Our WhatsApp group, for members.'],['chat','💬','Group chat','Chat with the group, right here.'],['announcements','📢','Announcements','News from the admins.'],['assignments','📝','Assignments','Deadlines and what’s due.'],['members','🧑‍🤝‍🧑','Members','Meet the rest of the group.'],['about','👥','Creators','Who built this site.']];
   return`<section class="hero"><h1>Learn together.<br>Grow together.</h1><p>Welcome to Gemini Royals ♊, our private space for classes, resources, memories and everything in between.</p>
   ${ev?`<p class="mut">Next up: <b style="color:var(--tx)">${esc(ev.title)}</b></p><div class="cd" id="cd" data-t="${ev.event_date}"></div>`:''}
   ${an?`<div class="card" style="margin:18px 0;max-width:560px"><span class="mut">📢 Latest announcement</span><h3>${esc(an.title)}</h3><p>${esc(an.body).slice(0,140)}</p></div>`:''}<a class="btn" href="${user?'classes':'login'}.html">${user?'Join a class':'Sign in to enter'}</a></section>
@@ -134,11 +158,11 @@ const pages={
  async classes(){if(!ok(1))return gate();const g=user.role==='guest';
   const l=(await db.list('classes')).sort((a,b)=>new Date(a.starts_at)-new Date(b.starts_at));
   const at=user.role==='admin'?await db.list('attendance'):[];const now=Date.now();
-  return`<h2>Online classes</h2><div id="live"></div>${g?'<p class="mut" style="margin-bottom:16px">One-time guest access: you only see classes opened to guests.</p>':form('classes','<input name="title" placeholder="Class topic" required><input name="starts_at" type="datetime-local" required><label class="mut"><input type="checkbox" name="guests" style="width:auto"> Open to one-time guests</label>')}
+  return`<h2>Online classes</h2><p class="mut" style="margin-bottom:16px">Join opens the meeting in a new tab. Add a Google Meet or Zoom link when scheduling if you prefer.</p>${g?'<p class="mut" style="margin-bottom:16px">One-time guest access: you only see classes opened to guests.</p>':form('classes','<input name="title" placeholder="Class topic" required><input name="starts_at" type="datetime-local" required><input name="meet" type="url" placeholder="Meeting link (optional: Google Meet, Zoom…)"><label class="mut"><input type="checkbox" name="guests" style="width:auto"> Open to one-time guests</label>')}
   <div class="grid">${l.map(c=>{const s=new Date(c.starts_at),d=s-now,soon=d<18e5&&d>-72e5,n=[...new Set(at.filter(a=>a.class_id==c.id).map(a=>a.name||a.email))];
   const z=x=>new Date(x).toISOString().replace(/[-:]|\.\d+/g,'');const btn='style="background:var(--ln);color:var(--tx)" target="_blank" rel="noopener"';
   return`<div class="card">${del('classes',c)}<span class="mut">${fmt(c.starts_at)}${soon?' · <b style="color:var(--ac2)">Live window</b>':d>0&&d<864e5?' · <b style="color:var(--ac2)">Within 24h</b>':''}${c.guests?' · guests welcome':''}</span><h3>${esc(c.title)}</h3>
-  <button class="btn sm" data-r="${esc(c.room||'sg-'+c.id)}" data-i="${c.id}" onclick="join(this.dataset.r,this.dataset.i)">Join live</button>
+  <button class="btn sm" data-u="${esc(/^https:\/\//.test(c.meet||'')?c.meet:'https://meet.jit.si/'+encodeURIComponent(c.room||'sg-'+c.id))}" data-i="${c.id}" onclick="join(this.dataset.u,this.dataset.i)">Join live</button>
   <a class="btn sm" ${btn} href="https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(c.title+' - Gemini Royals')}&dates=${z(s)}/${z(+s+36e5)}">⏰ Remind me</a>
   ${g?'':`<a class="btn sm" ${btn} href="https://wa.me/?text=${encodeURIComponent('Class: '+c.title+' on '+fmt(c.starts_at)+'. Join us on the Gemini Royals site!')}">💬 Share</a>`}
   ${user.role==='admin'?`<details class="mut"><summary>Attendance (${n.length})</summary>${n.map(esc).join(', ')||'No one yet'}</details>`:''}</div>`}).join('')||empty('No classes scheduled.')}</div>`},
@@ -160,6 +184,10 @@ async community(){if(!ok())return gate();
   return`<h2>Members</h2><form class="card form" onsubmit="return saveMe(event)"><h3>My profile</h3><input name="full_name" value="${esc(me.full_name)}" placeholder="Your name" required><input name="program" value="${esc(me.program)}" placeholder="Programme / level, e.g. BSc Computer Science, Level 200"><textarea name="bio" rows="2" placeholder="A line about you">${esc(me.bio)}</textarea><button class="btn">Save profile</button></form><div class="grid">${l.map(p=>`<div class="card"><div class="av">${esc(ini(p.full_name))}</div><h3>${esc(p.full_name||'Member')}</h3><p style="color:var(--ac2);font-size:.85rem">${p.role==='admin'?'Admin':'Member'}${p.program?' · '+esc(p.program):''}</p><p class="mut">${esc(p.bio)}</p></div>`).join('')||empty('No members yet.')}</div>`},
  async about(){const c=x=>`<a class="btn sm" style="background:var(--ln);color:var(--tx)" target="_blank" rel="noopener" href="${esc(x[0])}">${x[1]}</a>`;
   return`<h2>The creator</h2><p class="mut" style="margin-bottom:20px">Gemini Royals ♊ was designed and built by:</p><div class="grid">${CREATORS.map(p=>`<div class="card"><div class="av">${esc(p.name.split(' ').slice(0,2).map(w=>w[0]).join(''))}</div><h3>${esc(p.name)}</h3><p style="color:var(--ac2);font-size:.9rem">${esc(p.role)}</p><p class="mut" style="margin:8px 0">${esc(p.bio)}</p><p class="mut">✉️ ${esc(p.email)}<br>📞 ${esc(p.phone)}${p.phone2?' / '+esc(p.phone2):''}</p>${[['https://wa.me/'+p.wa,'💬 WhatsApp'],['tel:+233'+p.phone.slice(1),'📞 Call'],['mailto:'+p.email,'✉️ Email'],[p.linkedin,'💼 LinkedIn'],[p.tiktok,'🎵 TikTok']].filter(x=>x[0]).map(c).join('')}</div>`).join('')}</div>`},
+ async recordings(){if(!ok())return gate();
+  const cl=await db.list('classes'),l=await db.list('recordings');const nm=id=>{const c=cl.find(x=>x.id==id);return c?c.title+' · '+fmt(c.starts_at):''};
+  return`<h2>Recordings</h2>${user.role==='admin'?form('recordings',`<input name="title" placeholder="Recording title" required><select name="class_id"><option value="">Which class? (optional)</option>${cl.map(c=>`<option value="${c.id}">${esc(c.title)} · ${fmt(c.starts_at)}</option>`).join('')}</select><input name="file" type="file" accept="video/*"><input name="link" type="url" placeholder="…or paste a link (Google Drive, YouTube unlisted)"><p class="mut">Tip: a full class is often bigger than the free upload limit (about 50 MB), so a link is safer for long videos.</p>`):''}<div class="grid">${l.map(r=>{const u=r.url||'',v=/^data:video/.test(u)||/\.(mp4|webm|mov|m4v|ogg)(\?|$)/i.test(u),safe=/^(https:\/\/|data:video)/.test(u),dl=u.startsWith('data:')?u:u+(u.includes('?')?'&':'?')+'download='+encodeURIComponent(r.title);
+  return`<div class="card">${del('recordings',r)}<span class="mut">${esc(nm(r.class_id))||fmt(r.created_at)}</span><h3>${esc(r.title)}</h3>${safe&&v?`<video controls preload="metadata" playsinline style="width:100%;border-radius:12px;margin:10px 0" src="${esc(u)}"></video><a class="btn sm" href="${esc(dl)}" download>⬇️ Download</a>`:safe?`<a class="btn sm" href="${esc(u)}" target="_blank" rel="noopener">▶ Watch</a>`:''}</div>`}).join('')||empty('No recordings yet.')}</div>`},
  async admin(){if(!user||user.role!=='admin')return gate();if(!sb)return'<h2>Admin</h2><p class="mut">Connect Supabase to manage members.</p>';
   const o={pending:0,guest:1,member:2,admin:3};const l=(await db.list('profiles')).sort((a,b)=>o[a.role]-o[b.role]);const pend=l.filter(p=>p.role==='pending').length;
   const b=(id,r,t)=>`<button class="btn sm" onclick="setRole('${id}','${r}')">${t}</button>`;
@@ -183,7 +211,7 @@ async function loadMsgs(){const b=$('#msgs');if(!b)return clearInterval(chatT);c
 function initChat(){loadMsgs().then(()=>{const b=$('#msgs');if(b)b.scrollTop=b.scrollHeight});clearInterval(chatT);chatT=setInterval(loadMsgs,4000);
  $('#cf').onsubmit=async e=>{e.preventDefault();const i=$('#ct');await db.add('messages',{body:i.value,author_name:user.name||user.email});i.value='';await loadMsgs();$('#msgs').scrollTop=1e9}}
 window.mark=id=>{let d=[];try{d=JSON.parse(localStorage.getItem('sg_done')||'[]')}catch(e){}localStorage.setItem('sg_done',JSON.stringify(d.includes(id)?d.filter(x=>x!==id):[...d,id]));route()};
-const links=[['timeline','Timeline'],['classes','Classes'],['resources','Resources'],['gallery','Memories'],['wishes','Guestbook'],['announcements','Announcements'],['assignments','Assignments'],['chat','Chat'],['community','WhatsApp'],['members','Members'],['about','Creators']];
+const links=[['timeline','Timeline'],['classes','Classes'],['recordings','Recordings'],['resources','Resources'],['gallery','Memories'],['wishes','Guestbook'],['announcements','Announcements'],['assignments','Assignments'],['chat','Chat'],['community','WhatsApp'],['members','Members'],['about','Creators']];
 async function route(){
  const p=document.body.dataset.page||'home';const k=pages[p]?p:'home';
  $('#nav').innerHTML=links.concat(user&&user.role==='admin'?[['admin','Admin'+(pendN?' ('+pendN+')':'')]]:[]).map(l=>`<a href="${l[0]}.html" class="${l[0]===k?'on':''}">${l[1]}</a>`).join('');
@@ -206,6 +234,8 @@ setInterval(tick,1000);
 const root=document.documentElement;
 function setTheme(t){root.dataset.theme=t;$('#th').textContent=t==='dark'?'☀️':'🌙';localStorage.setItem('sg_theme',t)}
 $('#th').onclick=()=>setTheme(root.dataset.theme==='dark'?'light':'dark');
+$('#mb').onclick=()=>$('header').classList.toggle('open');
+document.addEventListener('click',e=>{if(!e.target.closest('header,#mb'))$('header').classList.remove('open')});
 $('#mood').onchange=e=>{root.dataset.mood=e.target.value;localStorage.setItem('sg_mood',e.target.value)};
 setTheme(localStorage.getItem('sg_theme')||'dark');
 const m=localStorage.getItem('sg_mood');if(m){root.dataset.mood=m;$('#mood').value=m}

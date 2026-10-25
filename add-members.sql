@@ -5,6 +5,6 @@ create policy "profiles members read" on profiles for select to authenticated us
 create policy "profiles update own"   on profiles for update to authenticated using (id = auth.uid()) with check (id = auth.uid());
 -- Safety net: only an admin can ever change a role
 create or replace function public.guard_role() returns trigger language plpgsql security definer set search_path = public as $$
-begin if new.role is distinct from old.role and my_role() is distinct from 'admin' then raise exception 'Only an admin can change roles'; end if; return new; end $$;
+begin if new.role is distinct from old.role and auth.uid() is not null and my_role() is distinct from 'admin' then raise exception 'Only an admin can change roles'; end if; return new; end $$;
 drop trigger if exists guard_role on profiles;
 create trigger guard_role before update on profiles for each row execute function public.guard_role();

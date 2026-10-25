@@ -1,6 +1,11 @@
--- Run once in Supabase: SQL Editor > New query > Run. (Resets the study-group tables.)
-drop table if exists messages, announcements, assignments, settings, attendance, events, photos, resources, classes, wishes, profiles cascade;
+-- Gemini Royals database setup. Run in Supabase: SQL Editor > New query > Run.
+-- WARNING: this ERASES all existing site data (events, photos, resources, classes, attendance,
+-- messages, announcements, assignments, guestbook, settings and member profiles) before rebuilding.
+-- Login accounts are kept, but everyone is reset to 'pending' except fawaazmahama@gmail.com, who becomes admin.
+-- Uploaded files in Storage are not touched by SQL: empty the 'files' bucket in Dashboard > Storage if you want them gone.
+drop table if exists recordings, messages, announcements, assignments, settings, attendance, events, photos, resources, classes, wishes, profiles cascade;
 drop trigger if exists on_signup on auth.users;
+drop trigger if exists promote_owner on auth.users;
 
 -- Profiles: every sign-up starts as 'pending' until an admin verifies them
 create table profiles (id uuid primary key references auth.users on delete cascade, email text, full_name text,
@@ -10,10 +15,15 @@ create or replace function public.on_signup() returns trigger language plpgsql s
 begin insert into profiles (id, email, full_name, requested) values (new.id, new.email, new.raw_user_meta_data->>'full_name', coalesce(new.raw_user_meta_data->>'requested','member')); return new; end $$;
 create trigger on_signup after insert on auth.users for each row execute function public.on_signup();
 
+-- The owner's account is always the admin (only once the email address is confirmed)
+create or replace function public.promote_owner() returns trigger language plpgsql security definer set search_path = public as $$
+begin if lower(new.email) = 'fawaazmahama@gmail.com' and new.email_confirmed_at is not null then update public.profiles set role = 'admin' where id = new.id; end if; return new; end $$;
+create trigger promote_owner after insert or update of email_confirmed_at on auth.users for each row execute function public.promote_owner();
+
 create table events    (id bigint generated always as identity primary key, title text not null, note text, event_date timestamptz not null, created_by uuid default auth.uid(), created_at timestamptz default now());
 create table photos    (id bigint generated always as identity primary key, caption text, url text not null, created_by uuid default auth.uid(), created_at timestamptz default now());
 create table resources (id bigint generated always as identity primary key, title text not null, subject text, url text, created_by uuid default auth.uid(), created_at timestamptz default now());
-create table classes   (id bigint generated always as identity primary key, title text not null, starts_at timestamptz not null, guests boolean default false,
+create table classes   (id bigint generated always as identity primary key, title text not null, starts_at timestamptz not null, guests boolean default false, meet text,
   room text not null default replace(gen_random_uuid()::text,'-',''), created_by uuid default auth.uid(), created_at timestamptz default now());
 create table attendance(id bigint generated always as identity primary key, class_id bigint references classes on delete cascade, user_id uuid default auth.uid(), email text, name text, created_at timestamptz default now(), unique (class_id, user_id));
 create table wishes    (id bigint generated always as identity primary key, name text not null, message text not null, created_at timestamptz default now());
@@ -27,7 +37,7 @@ create policy "profiles members read" on profiles for select to authenticated us
 create policy "profiles update own"   on profiles for update to authenticated using (id = auth.uid()) with check (id = auth.uid());
 -- Safety net: only an admin can ever change a role
 create or replace function public.guard_role() returns trigger language plpgsql security definer set search_path = public as $$
-begin if new.role is distinct from old.role and my_role() is distinct from 'admin' then raise exception 'Only an admin can change roles'; end if; return new; end $$;
+begin if new.role is distinct from old.role and auth.uid() is not null and my_role() is distinct from 'admin' then raise exception 'Only an admin can change roles'; end if; return new; end $$;
 drop trigger if exists guard_role on profiles;
 create trigger guard_role before update on profiles for each row execute function public.guard_role();
 
@@ -57,6 +67,7 @@ create policy "wishes insert" on wishes for insert to anon, authenticated with c
 create policy "wishes delete" on wishes for delete to authenticated using (my_role() = 'admin');
 
 insert into storage.buckets (id, name, public) values ('files','files',true) on conflict do nothing;
+drop policy if exists "files upload" on storage.objects;
 create policy "files upload" on storage.objects for insert to authenticated with check (bucket_id = 'files' and my_role() in ('member','admin'));
 
 -- Group chat, announcements and assignments
@@ -75,6 +86,13 @@ create policy "announcements read"   on announcements for select to authenticate
 create policy "announcements insert" on announcements for insert to authenticated with check (my_role() = 'admin');
 create policy "announcements delete" on announcements for delete to authenticated using (my_role() = 'admin');
 
+-- Class recordings: only admins add or delete; members and admins watch and download
+create table recordings (id bigint generated always as identity primary key, title text not null, class_id bigint references classes on delete set null, url text not null, created_by uuid default auth.uid(), created_at timestamptz default now());
+alter table recordings enable row level security;
+create policy "recordings read"   on recordings for select to authenticated using (my_role() in ('member','admin'));
+create policy "recordings insert" on recordings for insert to authenticated with check (my_role() = 'admin');
+create policy "recordings delete" on recordings for delete to authenticated using (my_role() = 'admin');
+
 -- Members-only settings (holds the private WhatsApp group link, so it never appears in the page source)
 create table settings (key text primary key, value text not null, created_at timestamptz default now());
 alter table settings enable row level security;
@@ -82,5 +100,12 @@ create policy "settings read" on settings for select to authenticated using (my_
 insert into settings (key, value) values ('whatsapp', 'https://chat.whatsapp.com/CsCadWl5KLZCBmSmhvC7ZX')
   on conflict (key) do update set value = excluded.value;
 
--- AFTER you sign up on the site yourself, make yourself the first admin (use your email):
--- update profiles set role = 'admin' where email = 'you@example.com';
+-- Rebuild a profile for every existing login account. Everyone starts as 'pending' except the owner, who is the admin.
+insert into profiles (id, email, full_name, requested, role)
+select id, email, raw_user_meta_data->>'full_name', coalesce(raw_user_meta_data->>'requested','member'),
+       case when lower(email) = 'fawaazmahama@gmail.com' then 'admin' else 'pending' end
+from auth.users on conflict (id) do nothing;
+
+-- Check: this should list fawaazmahama@gmail.com as admin (if you have already signed up with it).
+-- If it is empty, sign up on the site with that email, confirm the email, and you become admin automatically.
+select email, role from profiles where role = 'admin';
