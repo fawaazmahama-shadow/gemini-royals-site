@@ -82,7 +82,7 @@ main{padding:22px 16px 48px}
 #bgo{position:absolute;inset:0;background:color-mix(in srgb,var(--bg) 72%,transparent)}
 @media(prefers-reduced-motion:reduce){.bgl{transition:none}}
 .logo{background:none;-webkit-background-clip:border-box;background-clip:border-box;color:var(--tx)}
-.logo span{background:linear-gradient(90deg,var(--ac),var(--ac2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.logo span:not(.mark){background:linear-gradient(90deg,var(--ac),var(--ac2));-webkit-background-clip:text;background-clip:text;color:transparent}
 .logo{display:flex;align-items:center;gap:10px}
 .mark{display:block;width:96px;height:96px;filter:drop-shadow(0 10px 28px color-mix(in srgb,var(--ac) 55%,transparent))}
 .mark.sm{width:34px;height:34px;filter:none;flex:none}
@@ -103,7 +103,14 @@ main{padding:22px 16px 48px}
 .markw{display:block;width:100px;margin-bottom:18px;filter:drop-shadow(0 8px 26px color-mix(in srgb,var(--ac) 50%,transparent));animation:fl 5s ease-in-out infinite}
 .hero .mark{animation:none;margin:0}
 @media(prefers-reduced-motion:reduce){.markw{animation:none}}
+header{gap:6px;padding:16px 12px}
+header .logo{padding:2px 8px 8px}
+nav{gap:1px}
+nav a{padding:7px 14px;font-size:.92rem}
+header select,header .ic{padding:8px 12px}
+[data-theme=light][data-mood=elegant]{--ac:#9a7424;--ac2:#c9a64d}
 </style>
+<script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 </head>
 <body data-page="backgrounds">
@@ -127,8 +134,8 @@ main{padding:22px 16px 48px}
 Made with care for the people who study together.
 </footer>
 <script>
-// ---- CONFIG: paste your Supabase project values. Leave blank for demo mode (data saved in this browser only).
-const CFG={url:'https://awlfqtgsypupcsmtwbgz.supabase.co',key:'sb_publishable_2jooo62yc0thHWQH2RRKwQ_AyItmdyM'};lfqtgsypupcsmtwbgz.supabase.co',key:'sb_publishable_2jooo62yc0thHWQH2RRKwQ_AyItmdyM'};
+// Supabase settings come from config.js. Leave it blank for demo mode (data saved in this browser only).
+const CFG=window.SG_CONFIG||{};
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=d=>new Date(d).toLocaleString([],{dateStyle:'medium',timeStyle:'short'});
@@ -136,8 +143,8 @@ const sb=(CFG.url&&CFG.key&&window.supabase)?supabase.createClient(CFG.url,CFG.k
 const LS=t=>{try{return JSON.parse(localStorage.getItem('sg_'+t)||'[]')}catch(e){return[]}};
 let user=null;
 
-const db={
- async list(t){if(sb){const{data}=await sb.from(t).select('*').order('created_at',{ascending:false});return data||[]}return LS(t)},
+const db={err:'',
+ async list(t){if(sb){const{data,error}=await sb.from(t).select('*').order('created_at',{ascending:false});db.err=error?t+': '+error.message:'';return data||[]}return LS(t)},
  async add(t,r,q){r.created_at=new Date().toISOString();
   if(sb){const{error}=await sb.from(t).insert(r);if(error&&!q)alert(error.message)}
   else{r.id=Date.now();localStorage.setItem('sg_'+t,JSON.stringify([r,...LS(t)]))}},
@@ -217,8 +224,8 @@ async community(){if(!ok())return gate();
   const cl=await db.list('classes'),l=await db.list('recordings');const nm=id=>{const c=cl.find(x=>x.id==id);return c?c.title+' · '+fmt(c.starts_at):''};
   return`<h2>Recordings</h2>${user.role==='admin'?form('recordings',`<input name="title" placeholder="Recording title" required><select name="class_id"><option value="">Which class? (optional)</option>${cl.map(c=>`<option value="${c.id}">${esc(c.title)} · ${fmt(c.starts_at)}</option>`).join('')}</select><input name="file" type="file" accept="video/*"><input name="link" type="url" placeholder="…or paste a link (Google Drive, YouTube unlisted)"><p class="mut">Tip: a full class is often bigger than the free upload limit (about 50 MB), so a link is safer for long videos.</p>`):''}<div class="grid">${l.map(r=>{const u=r.url||'',v=/^data:video/.test(u)||/\.(mp4|webm|mov|m4v|ogg)(\?|$)/i.test(u),safe=/^(https:\/\/|data:video)/.test(u),dl=u.startsWith('data:')?u:u+(u.includes('?')?'&':'?')+'download='+encodeURIComponent(r.title);
   return`<div class="card">${del('recordings',r)}<span class="mut">${esc(nm(r.class_id))||fmt(r.created_at)}</span><h3>${esc(r.title)}</h3>${safe&&v?`<video controls preload="metadata" playsinline style="width:100%;border-radius:12px;margin:10px 0" src="${esc(u)}"></video><a class="btn sm" href="${esc(dl)}" download>⬇️ Download</a>`:safe?`<a class="btn sm" href="${esc(u)}" target="_blank" rel="noopener">▶ Watch</a>`:''}</div>`}).join('')||empty('No recordings yet.')}</div>`},
- async backgrounds(){if(!user||user.role!=='admin')return gate();const l=(await db.list('backgrounds')).reverse();
-  return`<h2>Backgrounds</h2><p class="mut" style="margin-bottom:16px">Pictures and videos here fade in turn behind every page. Videos are muted and skipped on phones to save data. Keep videos short (5 to 15 seconds) and small. Changes show after a refresh.</p>${form('backgrounds','<input name="file" type="file" accept="image/*,video/*" required>')}<div class="grid">${l.map(b=>`<div class="card ph">${del('backgrounds',b)}${b.kind==='video'?`<video muted playsinline preload="metadata" src="${esc(b.url)}" style="width:100%;height:160px;object-fit:cover"></video>`:`<img src="${esc(b.url)}" alt="" loading="lazy" style="height:160px">`}<div>${b.kind==='video'?'🎞️ Video':'🖼️ Picture'}</div></div>`).join('')||empty('No backgrounds yet. Add your first picture above.')}</div>`},
+ async backgrounds(){if(!user||user.role!=='admin')return gate();const l=(await db.list('backgrounds')).reverse();const er=db.err.startsWith('backgrounds')?`<div class="card" style="margin-bottom:16px">⚠️ Couldn’t load backgrounds (${esc(db.err)}). Run add-backgrounds.sql in Supabase, then refresh.</div>`:'';
+  return`<h2>Backgrounds</h2>${er}<p class="mut" style="margin-bottom:16px">Pictures and videos here fade in turn behind every page. Videos are muted and skipped on phones to save data. Keep videos short (5 to 15 seconds) and small. Changes show after a refresh.</p>${form('backgrounds','<input name="file" type="file" accept="image/*,video/*" required>')}<div class="grid">${l.map(b=>`<div class="card ph">${del('backgrounds',b)}${b.kind==='video'?`<video muted playsinline preload="metadata" src="${esc(b.url)}" style="width:100%;height:160px;object-fit:cover"></video>`:`<img src="${esc(b.url)}" alt="" loading="lazy" style="height:160px">`}<div>${b.kind==='video'?'🎞️ Video':'🖼️ Picture'}</div></div>`).join('')||empty('No backgrounds yet. Add your first picture above.')}</div>`},
  async admin(){if(!user||user.role!=='admin')return gate();if(!sb)return'<h2>Admin</h2><p class="mut">Connect Supabase to manage members.</p>';
   const o={pending:0,guest:1,member:2,admin:3};const l=(await db.list('profiles')).sort((a,b)=>o[a.role]-o[b.role]);const pend=l.filter(p=>p.role==='pending').length;
   const b=(id,r,t)=>`<button class="btn sm" onclick="setRole('${id}','${r}')">${t}</button>`;
@@ -238,7 +245,7 @@ async function load(u){user=u;if(u&&sb){const{data}=await sb.from('profiles').se
 const CREATORS=[{name:'Mahama Fawaaz Alelemato',role:'Founder & lead developer · Tech Labs',bio:'Computer Science student in Accra who designs and builds websites and runs Tech Labs: web design, software training, and software installation and activation.',email:'fawaazmahama@gmail.com',phone:'0553550042',phone2:'0500121785',wa:'233553550042',linkedin:'https://linkedin.com/in/fawaaz-mahama-a799533a5',tiktok:'https://www.tiktok.com/@hollow.gh'}];
 const LOGO='<span class="markw"><span class="mark" role="img" aria-label="Gemini Royals logo"></span></span>';
 let chatT;
-async function loadMsgs(){const b=$('#msgs');if(!b)return clearInterval(chatT);const l=(await db.list('messages')).reverse().slice(-100);const bot=b.scrollTop+b.clientHeight>=b.scrollHeight-40;
+async function loadMsgs(){const b=$('#msgs');if(!b)return clearInterval(chatT);const l=(await db.list('messages')).reverse().slice(-100);if(db.err.startsWith('messages')){b.innerHTML='<p class="mut">⚠️ Couldn’t load the chat ('+esc(db.err)+'). Run add-features.sql in Supabase, then refresh.</p>';return}const bot=b.scrollTop+b.clientHeight>=b.scrollHeight-40;
  b.innerHTML=l.map(m=>{const me=user&&m.author_name===(user.name||user.email);return`<div style="justify-self:${me?'end':'start'};max-width:80%;background:${me?'var(--ac)':'var(--bg)'};color:${me?'#fff':'var(--tx)'};padding:8px 12px;border-radius:14px"><small style="opacity:.7">${esc(m.author_name)} · ${new Date(m.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</small><div style="white-space:pre-wrap">${esc(m.body)}</div></div>`}).join('')||'<p class="mut">Say hello 👋</p>';if(bot)b.scrollTop=b.scrollHeight}
 function initChat(){loadMsgs().then(()=>{const b=$('#msgs');if(b)b.scrollTop=b.scrollHeight});clearInterval(chatT);chatT=setInterval(loadMsgs,4000);
  $('#cf').onsubmit=async e=>{e.preventDefault();const i=$('#ct');await db.add('messages',{body:i.value,author_name:user.name||user.email});i.value='';await loadMsgs();$('#msgs').scrollTop=1e9}}
@@ -303,7 +310,7 @@ async function initBg(){
 (async()=>{
  $('#app').innerHTML='<p class="mut">Loading…</p>';let late=true;
  const auth=(async()=>{try{
-  if(sb){const{data}=await sb.auth.getSession();await load(data.session?.user||null);sb.auth.onAuthStateChange((_,s)=>{setTimeout(()=>load(s?.user||null).then(route),0)})}
+  if(sb){const{data}=await sb.auth.getSession();await load(data.session?.user||null);sb.auth.onAuthStateChange((_,s)=>{setTimeout(async()=>{const id=user&&user.id,r=user&&user.role;await load(s?.user||null);if((user&&user.id)!==id||(user&&user.role)!==r)route()},0)})}
   else{user=JSON.parse(localStorage.getItem('sg_user')||'null');if(user){user.role=user.role||'admin';user.name=user.name||user.email}}
  }catch(e){console.error(e)}late=false})();
  await Promise.race([auth,new Promise(r=>setTimeout(r,6000))]);
