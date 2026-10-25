@@ -74,6 +74,11 @@ header{transform:translateX(-105%);transition:transform .25s;width:min(280px,82v
 header.open{transform:none;box-shadow:0 0 60px #000a}
 main{padding:22px 16px 48px}
 }
+#bg{position:fixed;inset:0;z-index:-1;overflow:hidden;background:var(--bg)}
+.bgl{position:absolute;inset:0;opacity:0;transition:opacity 1.6s ease}.bgl.on{opacity:1}
+.bgl img,.bgl video{width:100%;height:100%;object-fit:cover;display:block}
+#bgo{position:absolute;inset:0;background:color-mix(in srgb,var(--bg) 72%,transparent)}
+@media(prefers-reduced-motion:reduce){.bgl{transition:none}}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 </head>
@@ -99,7 +104,7 @@ Made with care for the people who study together.
 </footer>
 <script>
 // ---- CONFIG: paste your Supabase project values. Leave blank for demo mode (data saved in this browser only).
-const CFG={url:'https://awlfqtgsypupcsmtwbgz.supabase.co',key:'sb_publishable_2jooo62yc0thHWQH2RRKwQ_AyItmdyM'};
+const CFG={url:'https://awlfqtgsypupcsmtwbgz.supabase.co',key:'sb_publishable_2jooo62yc0thHWQH2RRKwQ_AyItmdyM'};lfqtgsypupcsmtwbgz.supabase.co',key:'sb_publishable_2jooo62yc0thHWQH2RRKwQ_AyItmdyM'};
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=d=>new Date(d).toLocaleString([],{dateStyle:'medium',timeStyle:'short'});
@@ -121,11 +126,11 @@ async function up(f){
  return new Promise(r=>{const x=new FileReader();x.onload=()=>r(x.result);x.readAsDataURL(f)});
 }
 window.add=async e=>{e.preventDefault();const f=e.target,t=f.dataset.t,r={};
- for(const[k,v]of new FormData(f)){if(v instanceof File){if(v.size)r.url=await up(v)}else if(v!=='')r[k]=v}
+ for(const[k,v]of new FormData(f)){if(v instanceof File){if(v.size){r.url=await up(v);r.kind=(v.type||'').startsWith('video')?'video':'image'}}else if(v!=='')r[k]=v}
  if(r.starts_at)r.starts_at=new Date(r.starts_at).toISOString();
  if(r.event_date)r.event_date=new Date(r.event_date).toISOString();
  if(!r.url&&r.link)r.url=r.link;delete r.link;
- if(t==='photos'&&!r.url)return alert('Please choose a photo.');if(t==='recordings'&&!r.url)return alert('Add a video file or paste a link.');
+ if(t==='photos'&&!r.url)return alert('Please choose a photo.');if(t==='backgrounds'&&!r.url)return alert('Choose a picture or video.');if(t==='recordings'&&!r.url)return alert('Add a video file or paste a link.');
  if(r.guests)r.guests=true;if(t==='classes'&&!sb)r.room=Math.random().toString(36).slice(2,12)+Date.now().toString(36);
  await db.add(t,r);f.reset();route();return false};
 window.rm=async(t,id)=>{await db.del(t,id);route()};
@@ -188,6 +193,8 @@ async community(){if(!ok())return gate();
   const cl=await db.list('classes'),l=await db.list('recordings');const nm=id=>{const c=cl.find(x=>x.id==id);return c?c.title+' · '+fmt(c.starts_at):''};
   return`<h2>Recordings</h2>${user.role==='admin'?form('recordings',`<input name="title" placeholder="Recording title" required><select name="class_id"><option value="">Which class? (optional)</option>${cl.map(c=>`<option value="${c.id}">${esc(c.title)} · ${fmt(c.starts_at)}</option>`).join('')}</select><input name="file" type="file" accept="video/*"><input name="link" type="url" placeholder="…or paste a link (Google Drive, YouTube unlisted)"><p class="mut">Tip: a full class is often bigger than the free upload limit (about 50 MB), so a link is safer for long videos.</p>`):''}<div class="grid">${l.map(r=>{const u=r.url||'',v=/^data:video/.test(u)||/\.(mp4|webm|mov|m4v|ogg)(\?|$)/i.test(u),safe=/^(https:\/\/|data:video)/.test(u),dl=u.startsWith('data:')?u:u+(u.includes('?')?'&':'?')+'download='+encodeURIComponent(r.title);
   return`<div class="card">${del('recordings',r)}<span class="mut">${esc(nm(r.class_id))||fmt(r.created_at)}</span><h3>${esc(r.title)}</h3>${safe&&v?`<video controls preload="metadata" playsinline style="width:100%;border-radius:12px;margin:10px 0" src="${esc(u)}"></video><a class="btn sm" href="${esc(dl)}" download>⬇️ Download</a>`:safe?`<a class="btn sm" href="${esc(u)}" target="_blank" rel="noopener">▶ Watch</a>`:''}</div>`}).join('')||empty('No recordings yet.')}</div>`},
+ async backgrounds(){if(!user||user.role!=='admin')return gate();const l=(await db.list('backgrounds')).reverse();
+  return`<h2>Backgrounds</h2><p class="mut" style="margin-bottom:16px">Pictures and videos here fade in turn behind every page. Videos are muted and skipped on phones to save data. Keep videos short (5 to 15 seconds) and small. Changes show after a refresh.</p>${form('backgrounds','<input name="file" type="file" accept="image/*,video/*" required>')}<div class="grid">${l.map(b=>`<div class="card ph">${del('backgrounds',b)}${b.kind==='video'?`<video muted playsinline preload="metadata" src="${esc(b.url)}" style="width:100%;height:160px;object-fit:cover"></video>`:`<img src="${esc(b.url)}" alt="" loading="lazy" style="height:160px">`}<div>${b.kind==='video'?'🎞️ Video':'🖼️ Picture'}</div></div>`).join('')||empty('No backgrounds yet. Add your first picture above.')}</div>`},
  async admin(){if(!user||user.role!=='admin')return gate();if(!sb)return'<h2>Admin</h2><p class="mut">Connect Supabase to manage members.</p>';
   const o={pending:0,guest:1,member:2,admin:3};const l=(await db.list('profiles')).sort((a,b)=>o[a.role]-o[b.role]);const pend=l.filter(p=>p.role==='pending').length;
   const b=(id,r,t)=>`<button class="btn sm" onclick="setRole('${id}','${r}')">${t}</button>`;
@@ -214,7 +221,7 @@ window.mark=id=>{let d=[];try{d=JSON.parse(localStorage.getItem('sg_done')||'[]'
 const links=[['timeline','Timeline'],['classes','Classes'],['recordings','Recordings'],['resources','Resources'],['gallery','Memories'],['wishes','Guestbook'],['announcements','Announcements'],['assignments','Assignments'],['chat','Chat'],['community','WhatsApp'],['members','Members'],['about','Creators']];
 async function route(){
  const p=document.body.dataset.page||'home';const k=pages[p]?p:'home';
- $('#nav').innerHTML=links.concat(user&&user.role==='admin'?[['admin','Admin'+(pendN?' ('+pendN+')':'')]]:[]).map(l=>`<a href="${l[0]}.html" class="${l[0]===k?'on':''}">${l[1]}</a>`).join('');
+ $('#nav').innerHTML=links.concat(user&&user.role==='admin'?[['admin','Admin'+(pendN?' ('+pendN+')':'')],['backgrounds','Backgrounds']]:[]).map(l=>`<a href="${l[0]}.html" class="${l[0]===k?'on':''}">${l[1]}</a>`).join('');
  $('#auth').textContent=user?`Sign out (${user.role||'demo'})`:'Sign in';
  $('#app').innerHTML=await pages[k]();if(k==='chat'&&$('#cf'))initChat();
  const f=$('#lf');if(f)f.onsubmit=e=>e.preventDefault(),f.querySelectorAll('button[data-m]').forEach(b=>b.onclick=()=>login(b.dataset.m));
@@ -240,10 +247,27 @@ $('#mood').onchange=e=>{root.dataset.mood=e.target.value;localStorage.setItem('s
 setTheme(localStorage.getItem('sg_theme')||'dark');
 const m=localStorage.getItem('sg_mood');if(m){root.dataset.mood=m;$('#mood').value=m}
 
+async function initBg(){
+ const mm=q=>window.matchMedia?matchMedia(q).matches:false;
+ let l=(await db.list('backgrounds')).reverse().filter(x=>x.url&&/^(https:\/\/|data:)/.test(x.url));
+ const still=mm('(prefers-reduced-motion:reduce)'),lite=mm('(max-width:900px)')||(navigator.connection&&navigator.connection.saveData);
+ if(lite||still)l=l.filter(x=>x.kind!=='video');
+ if(!l.length)return;
+ const bg=document.createElement('div');bg.id='bg';bg.innerHTML='<div class="bgl"></div><div class="bgl"></div><div id="bgo"></div>';document.body.prepend(bg);
+ const L=bg.querySelectorAll('.bgl');let i=-1,a=0,tm;
+ const show=()=>{i=(i+1)%l.length;const s=l[i],lay=L[a=1-a],old=L[1-a];
+  lay.innerHTML=s.kind==='video'?`<video muted playsinline src="${esc(s.url)}"></video>`:`<img alt="" src="${esc(s.url)}">`;
+  const m=lay.firstChild;m.onerror=()=>{clearTimeout(tm);tm=setTimeout(next,1500)};lay.classList.add('on');old.classList.remove('on');clearTimeout(tm);
+  if(m.tagName==='VIDEO'){m.muted=true;m.loop=l.length<2||still;m.play&&m.play().catch(()=>{})}
+  if(l.length<2||still)return;
+  if(s.kind==='video'){m.onended=next;tm=setTimeout(next,15000)}else tm=setTimeout(next,8000);
+  const n=l[(i+1)%l.length];if(n.kind!=='video')new Image().src=n.url};
+ const next=()=>{clearTimeout(tm);if(document.hidden)tm=setTimeout(next,2000);else show()};
+ show()}
 (async()=>{
  if(sb){const{data}=await sb.auth.getSession();await load(data.session?.user||null);sb.auth.onAuthStateChange((_,s)=>{setTimeout(()=>load(s?.user||null).then(route),0)})}
  else{user=JSON.parse(localStorage.getItem('sg_user')||'null');if(user){user.role=user.role||'admin';user.name=user.name||user.email}}
- route();
+ route();initBg().catch(()=>{});
 })();
 </script>
 </body>

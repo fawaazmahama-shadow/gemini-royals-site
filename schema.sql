@@ -3,7 +3,7 @@
 -- messages, announcements, assignments, guestbook, settings and member profiles) before rebuilding.
 -- Login accounts are kept, but everyone is reset to 'pending' except fawaazmahama@gmail.com, who becomes admin.
 -- Uploaded files in Storage are not touched by SQL: empty the 'files' bucket in Dashboard > Storage if you want them gone.
-drop table if exists recordings, messages, announcements, assignments, settings, attendance, events, photos, resources, classes, wishes, profiles cascade;
+drop table if exists backgrounds, recordings, messages, announcements, assignments, settings, attendance, events, photos, resources, classes, wishes, profiles cascade;
 drop trigger if exists on_signup on auth.users;
 drop trigger if exists promote_owner on auth.users;
 
@@ -92,6 +92,13 @@ alter table recordings enable row level security;
 create policy "recordings read"   on recordings for select to authenticated using (my_role() in ('member','admin'));
 create policy "recordings insert" on recordings for insert to authenticated with check (my_role() = 'admin');
 create policy "recordings delete" on recordings for delete to authenticated using (my_role() = 'admin');
+
+-- Background slideshow: anyone can see it (it shows on every page); only admins add or delete
+create table backgrounds (id bigint generated always as identity primary key, url text not null, kind text not null default 'image' check (kind in ('image','video')), created_by uuid default auth.uid(), created_at timestamptz default now());
+alter table backgrounds enable row level security;
+create policy "backgrounds read"   on backgrounds for select to anon, authenticated using (true);
+create policy "backgrounds insert" on backgrounds for insert to authenticated with check (my_role() = 'admin');
+create policy "backgrounds delete" on backgrounds for delete to authenticated using (my_role() = 'admin');
 
 -- Members-only settings (holds the private WhatsApp group link, so it never appears in the page source)
 create table settings (key text primary key, value text not null, created_at timestamptz default now());
